@@ -1,145 +1,192 @@
-Green Prompting for Lightweight LLMs
-======================================
+# **Green Prompting for Lightweight LLMs**
+### *Evaluating Energy–Accuracy Trade-offs in CPU-Deployable Models*
 
-_Evaluating Energy–Accuracy Trade-offs in CPU-Deployable Models_
+This project investigates how different prompting strategies affect the **accuracy**, **token efficiency**, and **energy consumption** of small, CPU-friendly language models.  
+It extends the methodology of:
 
-## Project Overview
+**Rubei et al. (2025). Prompt Engineering and Its Implications on the Energy Consumption of Large Language Models.**
 
-Large language models (LLMs) are powerful but computationally expensive. Recent work (Rubei et al., 2025) shows that prompt engineering significantly affects the energy consumption, latency, and accuracy of LLMs, yet most prior studies target large GPU-backed models. This project extends the investigation to small, CPU-friendly models that fit lightweight systems or edge devices, while measuring both accuracy and energy proxies.
+The goal is to evaluate *green prompting* techniques that improve performance while minimizing computational cost on systems without GPUs (e.g., GitHub Codespaces).
 
-### Models Evaluated
+---
 
-- **DistilGPT-2** – causal, small, and fast on CPU
-- **Flan-T5-Small** – encoder-decoder, instruction-tuned
-- **Optional:** Quantized LLaMA-2-7B (4-bit)
+# **1. Models Evaluated**
 
-These models run entirely on CPU within a GitHub Codespace deployment.
+This project compares three lightweight LLM families:
 
-## Research Questions
+| Model | Type | Parameters | Notes |
+|-------|------|------------|-------|
+| **DistilGPT-2** | Decoder-only | 82M | Very small, weak, baseline |
+| **Flan-T5-Small** | Encoder–decoder | 77M | Best for summarization and energy efficiency |
+| **Llama-3.2-1B-Instruct-Q8_0** | Decoder-only | 1B (quantized) | Strongest accuracy, most energy hungry |
 
-- How do prompt styles (zero-shot, few-shot, chain-of-thought, concise, verbose) affect accuracy, latency, token count, memory usage, and CPU-time-dependent energy? 
-- Can we define a Performance-per-Token (or Performance-per-100-Tokens) metric that captures both utility and efficiency? 
-- How do small models behave under “green prompting” strategies compared to the large LLMs studied by Rubei et al.?
+All models run **entirely on CPU**.
 
-## Tasks Evaluated
+---
 
-| Task | Dataset | Metric |
-| --- | --- | --- |
-| **BoolQ** | Yes/No question answering | Accuracy |
-| **GSM8K** | Math reasoning | Accuracy |
-| **XSum** | Summarization | ROUGE-1/2/L |
+# **2. Tasks Evaluated**
 
-Every task is evaluated with multiple prompting strategies.
+The experiments evaluate models on three standard NLP benchmarks:
 
-## Prompt Styles
+### **1. BoolQ (Yes/No Question Answering)**  
+- Metric: **Accuracy**
 
-- Zero-shot
-- One-/few-shot
-- Chain-of-thought (CoT)
-- Concise vs verbose instructions
+### **2. GSM8K (Math Word Reasoning)**  
+- Metric: **Numeric exact match**
 
-Each style influences token length, reasoning depth, and compute cost.
+### **3. XSum (Abstractive Summarization)**  
+- Metrics: **ROUGE-1, ROUGE-2, ROUGE-L, ROUGE-Lsum**
 
-## What the Code Does
+---
 
-| Module | Responsibility |
-| --- | --- |
-| `data_loading.py` | Load and prepare dataset subsets. |
-| `models.py` | Load CPU-only models and tokenizers. |
-| `prompts.py` | Store prompt templates for every task and style. |
-| `metrics.py` | Run inference, count tokens, estimate energy, and compute scores. |
-| `run_experiments.py` | Orchestrate experiments and persist results. |
+# **3. Prompt Styles Tested**
 
-### Workflow
+For each model–task pair, the following prompt types are evaluated:
 
-1. Load BoolQ subsets (currently 100 examples).
-2. Load DistilGPT-2 and Flan-T5-Small into CPU memory.
-3. For each prompt style:
-   - Build the prompt for every example. 
-   - Run model inference on the CPU.
-   - Measure input/output/total tokens, wall time, CPU time, and energy proxy (`energy_j = cpu_time * 25W`).
-   - Extract model answers, compute accuracy, and compute Performance-per-100-Tokens.
-4. Save results to `results/boolq_results.csv`, which contains the columns `model`, `prompt_style`, `accuracy`, `avg_energy_j`, `avg_tokens`, `perf_per_100_tokens`, `avg_wall_time_s`.
+| Prompt Style | Description |
+|--------------|-------------|
+| **Zero-shot** | Direct question or instruction |
+| **One-shot** | One worked example is provided |
+| **Few-shot** | (optional) multi-example prompts |
+| **Chain-of-thought** | Step-by-step reasoning |
+| **Concise summary** | Single-sentence summary request |
+| **Verbose summary** | More descriptive instructions |
 
-## Energy Measurement
+Not all styles apply to all tasks.
 
-GitHub Codespaces lack real hardware power counters, so energy is approximated as:
+---
 
+# **4. Metrics Recorded**
+
+Each inference records:
+
+### **Performance**
+- Accuracy (BoolQ, GSM8K)
+- ROUGE scores (XSum)
+- Performance-per-100-tokens  
+  - Meaning: `(accuracy or ROUGE-L) / (avg_tokens / 100)`
+
+### **Efficiency**
+- **avg_tokens**: total input + output tokens
+- **avg_wall_time_s**: total latency
+- **avg_energy_j**: estimated CPU energy (using psutil CPU time x estimated watts)
+
+### **Energy Proxy**
+Energy (E) is estimated from:
 ```
-energy_joules = cpu_time_seconds * 25W
+E = CPU_time_seconds × 25 watts
 ```
-
-This follows the methodology from Rubei et al., with the stated limitation about the proxy.
-
-## Repository Structure
-
-```
-/your-project-folder
-  data_loading.py
-  models.py
-  prompts.py
-  metrics.py
-  run_experiments.py
-  results/
-      boolq_results.csv   (generated after experiments)
-  figs/
-      (plots go here)
-  README.md
+Using:
+```python
+psutil.Process().cpu_times()
 ```
 
-## Installation and Setup
+---
 
+# **5. Project Structure**
+
+```
+Green-Prompting/
+│
+├─ data_loading.py          # Load BoolQ, GSM8K, XSum
+├─ prompts.py               # Prompt templates for all tasks
+├─ metrics.py               # Inference + energy + performance metrics
+├─ models.py                # HF + Llama.cpp model loaders
+├─ run_experiments.py       # Main experiment runner
+├─ plots.py                 # Generates all figs with one command
+│
+├─ results/
+│   └─ all_results.csv      # Final combined table
+│
+└─ figs/
+    ├─ boolq_accuracy_bar.png
+    ├─ boolq_accuracy_vs_energy.png
+    ├─ ...
+    ├─ xsum_rougeL_vs_energy.png
+    └─ (many more)
+```
+
+---
+
+# **6. Installation**
+
+### **1. Clone this repo**
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install "transformers>=4.44.0" "datasets==2.20.0" accelerate
+git clone https://github.com/KalyanbrataIISc/Green-Prompting.git
+cd Green-Prompting
 ```
 
-## Running Your First Experiment
+### **2. Create a virtual environment**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
 
-From the project directory:
+### **3. Install dependencies**
+```bash
+pip install -r requirements.txt
+```
 
+### **4. Add the Llama 3.2 model**
+Place the quantized model in your root folder:
+
+```
+Llama-3.2-1B-Instruct-Q8_0.gguf
+```
+
+---
+
+# **7. Running Experiments**
+
+### **Run all experiments**
 ```bash
 python run_experiments.py
 ```
 
-### Expected Behavior
-
-- Scripts download datasets and models on the first run.
-- BoolQ evaluation takes ~2–4 minutes on a CPU.
-- Results print as a table and appear in `results/boolq_results.csv`.
-- Example table structure:
-
+This will:
+- Load datasets  
+- Run BoolQ / GSM8K / XSum  
+- Evaluate all models in all prompt styles  
+- Compute metrics  
+- Save everything to:
 ```
-             model    prompt_style   task    accuracy    avg_tokens   perf_per_100_tokens   avg_energy_j   avg_wall_time_s
-0      distilgpt2      zero-shot     BoolQ      ...
-1      distilgpt2      one-shot      BoolQ      ...
-2      distilgpt2      cot           BoolQ      ...
-3  flan-t5-small      zero-shot      BoolQ      ...
-4  flan-t5-small      one-shot       BoolQ      ...
+results/all_results.csv
 ```
 
-## Next Steps (After BoolQ Works)
+---
 
-1. Add GSM8K benchmark and implement numeric answer extraction.
-2. Evaluate reasoning performance and compare zero-shot vs CoT.
-3. Add XSum with ROUGE scoring and contrast concise vs verbose summarization prompts.
-4. Plot accuracy vs energy, accuracy vs wall time, tokens vs accuracy, and perf-per-token vs energy, saving visuals to `figs/`.
+# **8. Generating Plots**
 
-## Using These Results in a Paper
+Just run:
+```bash
+python plots.py
+```
 
-- **Methodology:** Describe datasets/subsets, models, prompt styles, inference/metrics, and the energy proxy formula.
-- **Results:** Insert tables from CSVs and the plots created above. Compare prompting strategies.
-- **Discussion:** Cover accuracy trade-offs, overall efficiency, whether CoT is worth it at small scale, and how your small models differ from Rubei et al.’s large models.
-- **Conclusion:** Highlight that concise prompts usually offer the best efficiency, CoT boosts accuracy only sometimes but increases energy, and Performance-per-Token aggregates utility and cost.
+Figures are saved in:
+```
+figs/
+```
 
-## Reproducibility
+---
 
-All randomness is fixed with `seed=42`, so results should be deterministic across machines.
+# **9. Key Findings**
 
-## Citation
+### **BoolQ**
+- Llama-3.2-1B: **best accuracy**  
+- Flan-T5: **best energy efficiency**
 
-If referencing the inspiration paper:
+### **GSM8K**
+- All small models struggle  
+- Llama performs slightly better  
 
-> Rubei et al. (2025). “Prompt Engineering and Its Implications on the Energy Consumption of Large Language Models.”
+### **XSum**
+- Flan-T5 has highest ROUGE scores  
+- Llama uses **>25x** more energy
+
+---
+
+# **10. Citation**
+
+```
+Rubei et al. (2025). Prompt Engineering and Its Implications on the Energy Consumption of Large Language Models.
+```
